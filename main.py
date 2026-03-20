@@ -3,37 +3,42 @@ from flask import Flask
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-# Standard settings for a stable connection
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# High-performance settings for binary data
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', max_http_buffer_size=1e7)
 
 @app.route('/')
 def index():
     return """
+    <!DOCTYPE html>
     <html>
-        <head><title>TowerDesk Viewer</title></head>
-        <body style="margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden;">
-            <img id="display" style="width:100%; max-width:1200px; cursor:crosshair; border: 2px solid #444; background:#000;">
-            <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-            <script>
-                const socket = io();
-                const img = document.getElementById('display');
+    <head><title>TowerDesk Viewer</title></head>
+    <body style="margin:0; background:#000; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden;">
+        <img id="display" style="width:100%; max-width:1200px; cursor:crosshair; border:1px solid #333;">
+        <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+        <script>
+            const socket = io({transports: ['websocket']});
+            const img = document.getElementById('display');
 
-                // Receive the Base64 string and show it
-                socket.on('display', (data) => {
-                    if (data.image) {
-                        img.src = 'data:image/jpeg;base64,' + data.image;
-                    }
-                });
+            socket.on('display', (data) => {
+                if (data.image) {
+                    // Convert incoming buffer to a viewable image
+                    const blob = new Blob([new Uint8Array(data.image)], {type: 'image/jpeg'});
+                    const url = URL.createObjectURL(blob);
+                    const oldUrl = img.src;
+                    img.src = url;
+                    // Clean memory to prevent lag
+                    if (oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+                }
+            });
 
-                // Send clicks back to the friend
-                img.addEventListener('click', (e) => {
-                    const rect = img.getBoundingClientRect();
-                    const x = (e.clientX - rect.left) / rect.width;
-                    const y = (e.clientY - rect.top) / rect.height;
-                    socket.emit('mouse_action', {type: 'click', x: x, y: y});
-                });
-            </script>
-        </body>
+            img.addEventListener('click', (e) => {
+                const rect = img.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                socket.emit('mouse_action', {type: 'click', x: x, y: y});
+            });
+        </script>
+    </body>
     </html>
     """
 
