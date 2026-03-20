@@ -3,33 +3,29 @@ from flask import Flask
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-# The server engine
+# Standard settings for a stable connection
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 @app.route('/')
 def index():
-    # This is the "Visuals" - everything from your screenshot goes here
     return """
     <html>
+        <head><title>TowerDesk Viewer</title></head>
         <body style="margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden;">
-            <img id="display" style="width:100%; max-width:1200px; cursor:crosshair; border: 2px solid #444;">
+            <img id="display" style="width:100%; max-width:1200px; cursor:crosshair; border: 2px solid #444; background:#000;">
             <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
             <script>
-                const socket = io({transports: ['websocket']});
+                const socket = io();
                 const img = document.getElementById('display');
 
+                // Receive the Base64 string and show it
                 socket.on('display', (data) => {
                     if (data.image) {
-                        const blob = new Blob([data.image], {type: 'image/jpeg'});
-                        const url = URL.createObjectURL(blob);
-                        const oldUrl = img.src;
-                        img.src = url;
-                        if (oldUrl.startsWith('blob:')) {
-                            URL.revokeObjectURL(oldUrl);
-                        }
+                        img.src = 'data:image/jpeg;base64,' + data.image;
                     }
                 });
 
+                // Send clicks back to the friend
                 img.addEventListener('click', (e) => {
                     const rect = img.getBoundingClientRect();
                     const x = (e.clientX - rect.left) / rect.width;
@@ -43,12 +39,10 @@ def index():
 
 @socketio.on('screen_data')
 def handle_screen(data):
-    # This takes the image from the .exe and pushes it to the browser
     emit('display', data, broadcast=True, include_self=False)
 
 @socketio.on('mouse_action')
 def handle_mouse(data):
-    # This takes your click from the browser and pushes it to the .exe
     emit('execute', data, broadcast=True, include_self=False)
 
 if __name__ == '__main__':
